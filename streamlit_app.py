@@ -33,7 +33,7 @@ st.write("")
 df = pd.read_csv("demo_german_sales.csv")
 model, features = joblib.load("xgb_model.joblib")
 
-# -------------------- FILTERS SECTION --------------------
+# -------------------- FILTERS --------------------
 col1, col2, col3 = st.columns([1,3,1])
 
 with col2:
@@ -59,44 +59,58 @@ st.subheader("📅 Forecast for a Selected Date")
 default_date = pd.to_datetime(df["date"]).max() + pd.Timedelta(days=1)
 
 selected_date = st.date_input(
-    "Choose a date to forecast:",
+    "Choose date to predict:",
     value=default_date
 )
 
+# -------------------- PREDICTION LOGIC --------------------
 if st.button("Predict"):
     st.success(f"✅ Forecast generated for: **{selected_date}**")
 
-    # Prepare model input (last 7 days)
-    history = filtered_df.tail(7).copy()
-    X = history[features]
-    preds = model.predict(X)
+    # Get latest row of filtered data
+    latest = filtered_df.tail(1).copy()
 
-    predicted_total = preds.sum()
-    waste = predicted_total * 0.15   # assume 15% food waste
-    co2 = waste * 2.5                # 2.5 kg CO₂ per 1kg waste
+    # Build input row for model
+    input_row = latest.copy()
+    input_row["date"] = selected_date
+    input_row["dayofweek"] = pd.to_datetime(selected_date).weekday()
+    input_row["month"] = pd.to_datetime(selected_date).month
+    input_row["is_weekend"] = 1 if input_row["dayofweek"].iloc[0] >= 5 else 0
+
+    input_row["sales_lag1"] = latest["sales"].iloc[0]
+    input_row["sales_lag7"] = filtered_df.iloc[-7]["sales"] if len(filtered_df) >= 7 else latest["sales"].iloc[0]
+
+    # Predict
+    X = input_row[features]
+    predicted_value = model.predict(X)[0]
+
+    waste = predicted_value * 0.15
+    co2 = waste * 2.5
 
     # -------------------- KPI CARDS --------------------
-    colA, colB, colC, colD = st.columns(4)
-    colA.metric("📊 Last Week Sales", f"{int(history['sales'].sum())} units")
-    colB.metric("🔮 Forecasted Sales", f"{int(predicted_total)} units")
-    colC.metric("🗑️ Estimated Waste", f"{int(waste)} kg")
-    colD.metric("🌍 CO₂ Impact", f"{int(co2)} kg")
+    colA, colB, colC = st.columns(3)
+    colA.metric("📅 Date", f"{selected_date}")
+    colB.metric("🔮 Forecasted Sales", f"{int(predicted_value)} units")
+    colC.metric("🗑️ Estimated Waste", f"{int(waste)} kg | 🌍 CO₂: {int(co2)} kg")
 
     st.write("---")
 
-    # -------------------- CHART: Actual vs Predicted --------------------
-    temp = history.copy()
-    temp["predicted_sales"] = preds
+    # -------------------- BAR CHART (ONLY SELECTED DATE) --------------------
+    result_df = pd.DataFrame({
+        "date": [selected_date],
+        "predicted_sales": [predicted_value]
+    })
 
-    fig2 = px.bar(
-        temp, x="date", y=["sales","predicted_sales"],
-        barmode="group",
-        title=f"Actual vs Predicted Sales (up to {selected_date})"
+    fig = px.bar(
+        result_df, x="date", y="predicted_sales",
+        title=f"Predicted Sales for {selected_date}",
+        labels={"predicted_sales": "Forecasted Sales"}
     )
-    st.plotly_chart(fig2, use_container_width=True)
+
+    st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("⏳ Choose date & press **Predict** to view forecast.")
+    st.info("⏳ Choose a date & press **Predict** to display forecast.")
 
 # -------------------- HISTORICAL LINE CHART --------------------
 st.subheader("📈 Historical Sales Trend")
@@ -110,6 +124,6 @@ st.plotly_chart(fig1, use_container_width=True)
 # -------------------- FOOTER --------------------
 st.write("---")
 st.markdown(
-    "<p style='text-align:center; font-size:13px;'>SmartWaste © Student Project | Built for M516</p>",
+    "<p style='text-align:center; font-size:13px;'>SmartWaste © Student Project | M516 Submission</p>",
     unsafe_allow_html=True
 )

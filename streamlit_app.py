@@ -3,40 +3,91 @@ import pandas as pd
 import joblib
 import plotly.express as px
 
-st.set_page_config(page_title="SmartWaste – Food Waste Forecast (Germany)", page_icon="🥦", layout="wide")
+# -------------------- PAGE CONFIG --------------------
+st.set_page_config(
+    page_title="SmartWaste – Food Waste Forecast (Germany)",
+    page_icon="🥦",
+    layout="wide"
+)
 
-st.title("🥦 SmartWaste – AI-Powered Food Waste Forecasting (Germany)")
+# Hide sidebar
+hide_sidebar = """
+<style>
+    [data-testid="stSidebar"] {display: none;}
+</style>
+"""
+st.markdown(hide_sidebar, unsafe_allow_html=True)
 
-# Load data and model
+# -------------------- HEADER --------------------
+st.markdown(
+    """
+    <h1 style='text-align:center; color:#2E7D32;'>🥦 SmartWaste</h1>
+    <h4 style='text-align:center; color:#388E3C;'>AI-Powered Food Waste Forecasting for German Supermarkets 🇩🇪</h4>
+    """,
+    unsafe_allow_html=True
+)
+
+st.write("")
+
+# -------------------- LOAD DATA & MODEL --------------------
 df = pd.read_csv("demo_german_sales.csv")
 model, features = joblib.load("xgb_model.joblib")
 
-st.sidebar.header("Filters")
-city = st.sidebar.selectbox("Select City", ["All"] + sorted(df["city"].unique()))
-product = st.sidebar.selectbox("Select Product", ["All"] + sorted(df["product"].unique()))
+# -------------------- FILTER SECTION (CENTER) --------------------
+col1, col2, col3 = st.columns([1,2,1])
+with col2:
+    st.markdown("<h5 style='text-align:center;'>Filter Data</h5>", unsafe_allow_html=True)
+    city = st.selectbox("Select City", ["All"] + sorted(df["city"].unique()))
+    product = st.selectbox("Select Product", ["All"] + sorted(df["product"].unique()))
 
-plot_df = df.copy()
+filtered_df = df.copy()
 if city != "All":
-    plot_df = plot_df[plot_df["city"] == city]
+    filtered_df = filtered_df[filtered_df["city"] == city]
 if product != "All":
-    plot_df = plot_df[plot_df["product"] == product]
+    filtered_df = filtered_df[filtered_df["product"] == product]
 
-st.subheader("📈 Historical Sales")
-fig = px.line(plot_df, x="date", y="sales", color="product", title="Sales over Time")
-st.plotly_chart(fig, use_container_width=True)
-
-st.subheader("🔮 Predict Next Week’s Demand")
-sample = plot_df.tail(7).copy()
-X = sample[features]
+# -------------------- KPIs --------------------
+last_week = filtered_df.tail(7)
+X = last_week[features]
 pred = model.predict(X)
-sample["predicted_sales"] = pred
 
-fig2 = px.bar(sample, x="date", y=["sales","predicted_sales"], barmode="group",
-              title="Actual vs Predicted Sales (Last Week)")
+predicted_total = pred.sum()
+waste = predicted_total * 0.15     # assume 15% waste
+co2 = waste * 2.5                   # 2.5 kg CO₂ per 1kg food waste
+
+colA, colB, colC, colD = st.columns(4)
+colA.metric("📊 Historical Sales (last week)", f"{int(last_week['sales'].sum())} units")
+colB.metric("🔮 Predicted Sales (next week)", f"{int(predicted_total)} units")
+colC.metric("🗑️ Estimated Waste", f"{int(waste)} kg")
+colD.metric("🌍 CO₂ Impact Saved", f"{int(co2)} kg")
+
+st.write("---")
+
+# -------------------- GRAPH 1: HISTORICAL SALES --------------------
+st.subheader("📈 Historical Sales Trend")
+
+fig1 = px.line(filtered_df, x="date", y="sales", color="product",
+               title="Sales Trend Over Time")
+st.plotly_chart(fig1, use_container_width=True)
+
+# -------------------- GRAPH 2: ACTUAL vs PREDICTED --------------------
+st.subheader("🔮 Actual vs Predicted Sales (Last 7 Days Baseline)")
+
+temp_df = last_week.copy()
+temp_df["predicted_sales"] = pred
+
+fig2 = px.bar(temp_df, x="date", y=["sales","predicted_sales"],
+              barmode="group",
+              title="Actual vs Predicted Sales")
 st.plotly_chart(fig2, use_container_width=True)
 
-predicted_total = sample["predicted_sales"].sum()
-waste = predicted_total * 0.15
-co2 = waste * 2.5
-st.success(f"Predicted Total Sales Next Week: {predicted_total:.0f}")
-st.warning(f"Estimated Avoidable Waste: {waste:.0f} kg → CO₂ Savings ≈ {co2:.0f} kg")
+# -------------------- FOOTER --------------------
+st.write("---")
+st.markdown(
+    """
+    <p style='text-align:center; font-size:13px; color:gray;'>
+    SmartWaste • Predict & Prevent Food Waste • Built for M516 Project
+    </p>
+    """,
+    unsafe_allow_html=True
+)

@@ -112,18 +112,27 @@ if st.button("Predict"):
 
     st.write("---")
 
-    # -------------------- COMBINED CHART --------------------
-    fig = px.line(
-        merged,
-        x="date",
-        y=["sales", "predicted_sales"],
-        labels={"value": "Sales"},
-        title=f"Actual vs Predicted Sales ({start_date} to {end_date})"
-    )
-    st.plotly_chart(fig, use_container_width=True)
+# -------------------- COMBINED BAR CHART (Actual vs Predicted) --------------------
+chart_df = merged.melt(id_vars=["date"], value_vars=["sales", "predicted_sales"],
+                       var_name="Type", value_name="Sales")
 
-else:
-    st.info("⏳ Select a date range & press **Predict** to view results.")
+fig = px.bar(
+    chart_df,
+    x="date",
+    y="Sales",
+    color="Type",
+    barmode="group",
+    title=f"📊 Actual vs Predicted Sales ({start_date} → {end_date})",
+    color_discrete_map={"sales": "#2E7D32", "predicted_sales": "#FFB300"}
+)
+fig.update_layout(
+    xaxis_title="Date",
+    yaxis_title="Sales (units)",
+    legend_title="Data Type",
+    template="simple_white"
+)
+st.plotly_chart(fig, use_container_width=True)
+
 
 # -------------------- HISTORICAL SALES TREND --------------------
 st.subheader("📈 Historical Sales Trend")

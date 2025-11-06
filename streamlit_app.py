@@ -4,16 +4,26 @@ import joblib
 import plotly.express as px
 from datetime import timedelta
 import pydeck as pdk
+import os
 
 # -------------------- PAGE CONFIG --------------------
-st.set_page_config(page_title="SmartWaste – Germany", page_icon="🥦", layout="wide")
-st.markdown("<style>[data-testid='stSidebar'] {display:none;}</style>", unsafe_allow_html=True)
+st.set_page_config(
+    page_title="SmartWaste – Germany",
+    page_icon="🥦",
+    layout="wide"
+)
+
+# Hide sidebar
+st.markdown("<style>[data-testid='stSidebar'] {display: none;}</style>", unsafe_allow_html=True)
 
 # -------------------- HEADER --------------------
-st.markdown("""
-<h1 style='text-align:center;color:#2E7D32;'>🥦 SmartWaste Dashboard</h1>
-<h4 style='text-align:center;color:#388E3C;'>AI-Powered Food Waste Forecasting for German Supermarkets 🇩🇪</h4>
-""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <h1 style='text-align:center; color:#2E7D32;'>🥦 SmartWaste Dashboard</h1>
+    <h4 style='text-align:center; color:#388E3C;'>AI-Powered Food Waste Forecasting for German Supermarkets 🇩🇪</h4>
+    """,
+    unsafe_allow_html=True
+)
 st.write("")
 
 # -------------------- LOAD DATA & MODEL --------------------
@@ -38,24 +48,31 @@ if product != "All":
 
 st.write("---")
 
+# -------------------- DISPLAY SUPERMARKET LOGO --------------------
+logo_path = f"logos/{supermarket.lower()}.png" if supermarket != "All" else None
+if logo_path and os.path.exists(logo_path):
+    st.image(logo_path, width=180, caption=f"{supermarket} Logo", use_column_width=False)
+elif supermarket != "All":
+    st.info(f"🖼️ Logo file not found for {supermarket}. Place 'logos/{supermarket.lower()}.png' in your repo.")
+
 # -------------------- DATE RANGE INPUT --------------------
-st.subheader("📅 Forecast / Compare Date Range")
-min_date = pd.to_datetime(df["date"]).min()
+st.subheader("📅 Forecast Date Range")
+
 max_date = pd.to_datetime(df["date"]).max()
+default_start = max_date + pd.Timedelta(days=1)
+default_end = default_start + pd.Timedelta(days=6)
 
-default_start = max_date - pd.Timedelta(days=14)
-default_end = max_date
-
-start_date = st.date_input("Start Date", value=default_start, min_value=min_date)
-end_date   = st.date_input("End Date",   value=default_end,   min_value=min_date)
+start_date = st.date_input("Start Date", value=default_start)
+end_date = st.date_input("End Date", value=default_end)
 
 # -------------------- PREDICT BUTTON --------------------
-if st.button("Predict / Compare"):
+if st.button("Predict Range"):
     if start_date > end_date:
         st.error("❌ Start date must be before end date")
     else:
-        results = []
         current_date = start_date
+        results = []
+
         last_row = filtered_df.tail(1).copy()
         lag1 = last_row["sales"].iloc[0]
         lag7 = filtered_df.iloc[-7]["sales"] if len(filtered_df) >= 7 else lag1
@@ -72,100 +89,70 @@ if st.button("Predict / Compare"):
             pred = model.predict(row[features])[0]
             waste = pred * 0.15
             co2 = waste * 2.5
+
             results.append([current_date, pred, waste, co2])
 
             lag7 = lag1
             lag1 = pred
             current_date += timedelta(days=1)
 
-        pred_df = pd.DataFrame(results, columns=["date","predicted_sales","waste","co2"])
+        result_df = pd.DataFrame(results, columns=["date","forecast","waste","co2"])
 
-        # --- merge with actual sales (if exist in data range)
-        df["date"] = pd.to_datetime(df["date"])
-        actuals = filtered_df[(df["date"]>=start_date) & (df["date"]<=end_date)][["date","sales"]]
-        merged = pd.merge(pred_df, actuals, on="date", how="left")
-
-        # --- KPIs
-        colA,colB,colC = st.columns(3)
-        colA.metric("📅 Days", f"{len(merged)}")
-        colB.metric("🔮 Total Forecasted", f"{int(merged['predicted_sales'].sum())} units")
-        colC.metric("🗑️ Est. Waste / CO₂", f"{int(merged['waste'].sum())} kg / {int(merged['co2'].sum())} kg")
+        # KPI totals
+        colA, colB, colC = st.columns(3)
+        colA.metric("📅 Days Forecasted", f"{len(result_df)} days")
+        colB.metric("🔮 Total Forecasted Sales", f"{int(result_df['forecast'].sum())} units")
+        colC.metric("🗑️ Est. Waste / CO₂", f"{int(result_df['waste'].sum())} kg / {int(result_df['co2'].sum())} kg")
 
         st.write("---")
 
-        # --- Table
-        st.write("### 📊 Actual vs Predicted Data")
-        st.dataframe(merged)
+        st.write("### 📊 Forecast Results")
+        st.dataframe(result_df)
 
-        # --- Chart: show both if actual available
-        fig = px.bar(merged, x="date", y="predicted_sales",
-                     color_discrete_sequence=["#4CAF50"],
-                     title=f"Predicted vs Actual Sales ({start_date} → {end_date})",
-                     labels={"predicted_sales":"Predicted Sales"})
-        if merged["sales"].notna().any():
-            fig.add_scatter(x=merged["date"], y=merged["sales"], mode="lines+markers",
-                            name="Actual Sales", line=dict(color="#1E88E5"))
+        # Chart
+        fig = px.bar(
+            result_df, x="date", y="forecast",
+            title=f"Forecasted Sales from {start_date} to {end_date}",
+            labels={"forecast":"Predicted Sales"}
+        )
         st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("⏳ Select a date range then click **Predict / Compare**")
+    st.info("⏳ Choose a start & end date, then press **Predict Range**")
 
-# -------------------- MAP OF GERMANY (Working Version) --------------------
+# -------------------- MAP OF GERMANY --------------------
 st.subheader("🗺️ Store Locations in Germany")
 
 city_coords = {
     "Berlin": [52.5200, 13.4050],
     "Munich": [48.1351, 11.5820],
-    "Hamburg": [53.5511, 9.9937],
-    "Cologne": [50.9375, 6.9603],
-    "Frankfurt": [50.1109, 8.6821]
+    "Hamburg": [53.5511, 9.9937]
 }
 
-# Create simulated stores for each supermarket and city
-store_data = []
-for city_name, (lat, lon) in city_coords.items():
-    for supermarket_name in ["Edeka", "Rewe", "Lidl", "Aldi", "Kaufland", "Penny"]:
-        for i in range(3):  # simulate 3 stores per supermarket per city
-            store_data.append({
-                "city": city_name,
-                "supermarket": supermarket_name,
-                "latitude": lat + (0.02 * i) - 0.02,
-                "longitude": lon + (0.03 * i) - 0.03
-            })
+map_data = pd.DataFrame([
+    {"city": c, "lat": city_coords[c][0], "lon": city_coords[c][1], "supermarket": s}
+    for c in city_coords.keys()
+    for s in ["Edeka","Rewe","Lidl","Aldi","Kaufland","Penny"]
+])
 
-map_data = pd.DataFrame(store_data)
-
-# Apply filters
 if city != "All":
     map_data = map_data[map_data["city"] == city]
 if supermarket != "All":
     map_data = map_data[map_data["supermarket"] == supermarket]
 
-# Display map with PyDeck
-st.pydeck_chart(pdk.Deck(
-    map_style="mapbox://styles/mapbox/light-v9",
-    initial_view_state=pdk.ViewState(
-        latitude=51.1657, longitude=10.4515, zoom=5.2, pitch=0),
-    layers=[
-        pdk.Layer(
-            "ScatterplotLayer",
-            data=map_data,
-            get_position=["longitude", "latitude"],
-            get_fill_color=[46, 125, 50, 160],
-            get_radius=40000,
-            pickable=True
-        )
-    ],
-    tooltip={"text": "City: {city}\nSupermarket: {supermarket}"}
-))
+st.map(map_data, latitude="lat", longitude="lon", size=40, color="#2E7D32")
 
-# -------------------- HISTORICAL SALES --------------------
-st.subheader("📈 Full Historical Sales Trend")
-fig2 = px.line(filtered_df, x="date", y="sales", color="product",
-               title="Historical Sales Over Time")
-st.plotly_chart(fig2, use_container_width=True)
+# -------------------- HISTORICAL SALES PLOT --------------------
+st.subheader("📈 Historical Sales Trend")
+fig1 = px.line(
+    filtered_df, x="date", y="sales", color="product",
+    title="Sales Trend Over Time"
+)
+st.plotly_chart(fig1, use_container_width=True)
 
 # -------------------- FOOTER --------------------
 st.write("---")
-st.markdown("<p style='text-align:center;font-size:13px;'>SmartWaste © Student Project | M516 Submission</p>",
-            unsafe_allow_html=True)
+st.markdown(
+    "<p style='text-align:center; font-size:13px;'>SmartWaste © Student Project | M516 Submission</p>",
+    unsafe_allow_html=True
+)

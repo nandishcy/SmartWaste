@@ -110,7 +110,7 @@ if st.button("Predict / Compare"):
 else:
     st.info("⏳ Select a date range then click **Predict / Compare**")
 
-# -------------------- MAP OF GERMANY --------------------
+# -------------------- MAP OF GERMANY (Working Version) --------------------
 st.subheader("🗺️ Store Locations in Germany")
 
 city_coords = {
@@ -121,18 +121,43 @@ city_coords = {
     "Frankfurt": [50.1109, 8.6821]
 }
 
-map_data = pd.DataFrame([
-    {"city": c, "lat": city_coords[c][0], "lon": city_coords[c][1], "supermarket": s}
-    for c in city_coords.keys()
-    for s in ["Edeka","Rewe","Lidl","Aldi","Kaufland","Penny"]
-])
+# Create simulated stores for each supermarket and city
+store_data = []
+for city_name, (lat, lon) in city_coords.items():
+    for supermarket_name in ["Edeka", "Rewe", "Lidl", "Aldi", "Kaufland", "Penny"]:
+        for i in range(3):  # simulate 3 stores per supermarket per city
+            store_data.append({
+                "city": city_name,
+                "supermarket": supermarket_name,
+                "latitude": lat + (0.02 * i) - 0.02,
+                "longitude": lon + (0.03 * i) - 0.03
+            })
 
+map_data = pd.DataFrame(store_data)
+
+# Apply filters
 if city != "All":
     map_data = map_data[map_data["city"] == city]
 if supermarket != "All":
     map_data = map_data[map_data["supermarket"] == supermarket]
 
-st.map(map_data, latitude="lat", longitude="lon", size=40, color="#2E7D32")
+# Display map with PyDeck
+st.pydeck_chart(pdk.Deck(
+    map_style="mapbox://styles/mapbox/light-v9",
+    initial_view_state=pdk.ViewState(
+        latitude=51.1657, longitude=10.4515, zoom=5.2, pitch=0),
+    layers=[
+        pdk.Layer(
+            "ScatterplotLayer",
+            data=map_data,
+            get_position=["longitude", "latitude"],
+            get_fill_color=[46, 125, 50, 160],
+            get_radius=40000,
+            pickable=True
+        )
+    ],
+    tooltip={"text": "City: {city}\nSupermarket: {supermarket}"}
+))
 
 # -------------------- HISTORICAL SALES --------------------
 st.subheader("📈 Full Historical Sales Trend")

@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import joblib
 import plotly.express as px
-from datetime import timedelta
 
 # -------------------- PAGE CONFIG --------------------
 st.set_page_config(
@@ -27,7 +26,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
 st.write("")
 
 # -------------------- LOAD DATA & MODEL --------------------
@@ -36,8 +34,10 @@ model, features = joblib.load("xgb_model.joblib")
 
 # -------------------- FILTERS --------------------
 col1, col2, col3 = st.columns([1,3,1])
+
 with col2:
     st.markdown("<h5 style='text-align:center;'>Filter Data</h5>", unsafe_allow_html=True)
+
     city = st.selectbox("Select City", ["All"] + sorted(df["city"].unique()))
     supermarket = st.selectbox("Select Supermarket", ["All"] + sorted(df["supermarket"].unique()))
     product = st.selectbox("Select Product", ["All"] + sorted(df["product"].unique()))
@@ -53,86 +53,90 @@ if product != "All":
 st.write("---")
 
 # -------------------- DATE RANGE INPUT --------------------
-st.subheader("📅 Forecast Date Range")
+st.subheader("📅 Forecast for Date Range")
 
+# Default range = last date + next 7 days
+min_date = pd.to_datetime(df["date"]).min()
 max_date = pd.to_datetime(df["date"]).max()
-default_start = max_date + pd.Timedelta(days=1)
-default_end = default_start + pd.Timedelta(days=6)
+default_start = max_date - pd.Timedelta(days=7)
+default_end = max_date + pd.Timedelta(days=7)
 
-start_date = st.date_input("Start Date", value=default_start)
-end_date = st.date_input("End Date", value=default_end)
+start_date, end_date = st.date_input(
+    "Select start and end dates:",
+    value=[default_start, default_end]
+)
 
-# -------------------- FORECAST BUTTON --------------------
-if st.button("Predict Range"):
-    if start_date > end_date:
-        st.error("❌ Start date must be before end date")
-    else:
-        current_date = start_date
-        results = []
+# -------------------- PREDICT BUTTON --------------------
+if st.button("Predict"):
+    st.success(f"✅ Forecast generated for {start_date} to {end_date}")
 
-        last_row = filtered_df.tail(1).copy()
-        lag1 = last_row["sales"].iloc[0]
-        lag7 = filtered_df.iloc[-7]["sales"] if len(filtered_df) >= 7 else lag1
+    # Prepare range of dates
+    date_range = pd.date_range(start=start_date, end=end_date)
+    forecast_rows = []
 
-        while current_date <= end_date:
-            row = last_row.copy()
-            row["date"] = current_date
-            row["dayofweek"] = current_date.weekday()
-            row["month"] = current_date.month
-            row["is_weekend"] = 1 if current_date.weekday() >= 5 else 0
-            row["sales_lag1"] = lag1
-            row["sales_lag7"] = lag7
+    latest = filtered_df.tail(1).copy()
 
-            pred = model.predict(row[features])[0]
+    for d in date_range:
+        input_row = latest.copy()
+        input_row["date"] = d
+        input_row["dayofweek"] = d.weekday()
+        input_row["month"] = d.month
+        input_row["is_weekend"] = 1 if d.weekday() >= 5 else 0
+        input_row["sales_lag1"] = latest["sales"].iloc[0]
+        input_row["sales_lag7"] = filtered_df.iloc[-7]["sales"] if len(filtered_df) >= 7 else latest["sales"].iloc[0]
 
-            waste = pred * 0.15
-            co2 = waste * 2.5
+        X = input_row[features]
+        pred_val = model.predict(X)[0]
+        forecast_rows.append([d, pred_val])
 
-            results.append([current_date, pred, waste, co2])
+    forecast_df = pd.DataFrame(forecast_rows, columns=["date", "predicted_sales"])
 
-            # update lags
-            lag7 = lag1
-            lag1 = pred
+    # -------------------- MERGE WITH ACTUAL DATA --------------------
+    actual_df = filtered_df.copy()
+    actual_df["date"] = pd.to_datetime(actual_df["date"])
+    merged = pd.merge(actual_df, forecast_df, on="date", how="outer")
 
-            current_date += timedelta(days=1)
+    # KPIs
+    total_pred = forecast_df["predicted_sales"].sum()
+    total_actual = actual_df[
+        (actual_df["date"] >= pd.to_datetime(start_date)) & (actual_df["date"] <= pd.to_datetime(end_date))
+    ]["sales"].sum()
+    waste = total_pred * 0.15
+    co2 = waste * 2.5
 
-        result_df = pd.DataFrame(results, columns=["date","forecast","waste","co2"])
+    colA, colB, colC, colD = st.columns(4)
+    colA.metric("📊 Actual Sales (Range)", f"{int(total_actual)} units")
+    colB.metric("🔮 Forecasted Sales", f"{int(total_pred)} units")
+    colC.metric("🗑️ Estimated Waste", f"{int(waste)} kg")
+    colD.metric("🌍 CO₂ Impact", f"{int(co2)} kg")
 
-        # KPI totals
-        colA, colB, colC = st.columns(3)
-        colA.metric("📅 Days Forecasted", f"{len(result_df)} days")
-        colB.metric("🔮 Total Forecasted Sales", f"{int(result_df['forecast'].sum())} units")
-        colC.metric("🗑️ Est. Waste / CO₂", 
-                    f"{int(result_df['waste'].sum())} kg / {int(result_df['co2'].sum())} kg")
+    st.write("---")
 
-        st.write("---")
-
-        # Table
-        st.write("### 📊 Forecast Results")
-        st.dataframe(result_df)
-
-        # Chart
-        fig = px.bar(
-            result_df, x="date", y="forecast",
-            title=f"Forecasted Sales from {start_date} to {end_date}",
-            labels={"forecast": "Predicted Sales"}
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    # -------------------- COMBINED CHART --------------------
+    fig = px.line(
+        merged,
+        x="date",
+        y=["sales", "predicted_sales"],
+        labels={"value": "Sales"},
+        title=f"Actual vs Predicted Sales ({start_date} to {end_date})"
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 else:
-    st.info("⏳ Choose a start & end date, then press **Predict Range**")
+    st.info("⏳ Select a date range & press **Predict** to view results.")
 
-# -------------------- HISTORICAL SALES PLOT --------------------
+# -------------------- HISTORICAL SALES TREND --------------------
 st.subheader("📈 Historical Sales Trend")
+
 fig1 = px.line(
     filtered_df, x="date", y="sales", color="product",
-    title="Sales Trend Over Time"
+    title="Historical Sales Trend"
 )
 st.plotly_chart(fig1, use_container_width=True)
 
 # -------------------- FOOTER --------------------
 st.write("---")
 st.markdown(
-    "<p style='text-align:center; font-size:13px;'>SmartWaste © Student Project | M516 Submission</p>",
+    "<p style='text-align:center; font-size:13px;'>SmartWaste © Student Project | Built for M516</p>",
     unsafe_allow_html=True
 )

@@ -62,9 +62,9 @@ st.markdown(
 )
 
 # -------------------- Load data & model --------------------
-DATA_PATH = "data/demo_german_sales.csv"
-MODEL_PATH = "models/xgb_model.joblib"
-SHAP_PATH = "outputs/shap_summary.png"
+DATA_PATH = "demo_german_sales.csv"
+MODEL_PATH = "xgb_model.joblib"
+SHAP_PATH = "shap_summary.png"
 
 @st.cache_data
 def load_data(path):

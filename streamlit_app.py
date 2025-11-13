@@ -243,14 +243,13 @@ with tabs[3]:
     st.metric("Recommended order quantity (units)", f"{rec_q:,}")
     st.markdown("This is a simple heuristic suggestion. For production, integrate real inventory costs & constraints.")
 
-# -------------------- Page: Map --------------------
 # -------------------- Map (real supermarket locations) --------------------
 with tabs[4]:
     st.subheader("Germany Map • Real Supermarket Locations")
     st.markdown("Interactive map: select brand or show all. Pins show brand + city.")
 
     try:
-        stores = pd.read_csv("supermarkets_real.csv")
+        stores = pd.read_csv("data/supermarkets_real.csv")
     except FileNotFoundError:
         st.warning("data/supermarkets_real.csv not found. Upload the CSV to your repo under /data.")
         st.stop()
@@ -301,10 +300,8 @@ with tabs[4]:
     # initial view set to Germany center
     view = pdk.ViewState(latitude=51.1657, longitude=10.4515, zoom=5, pitch=0)
 
-  deck = pdk.Deck(layers=[layer], initial_view_state=view, map_style="light",  # or "road"
-                tooltip={"html": "<b>{brand}</b><br/>{city}<br/>Lat: {lat} Lon: {lon}", "style":{"color":"black"}})
-
-
+    deck = pdk.Deck(layers=[layer], initial_view_state=view, map_style="mapbox://styles/mapbox/dark-v10",
+                    tooltip={"html": "<b>{brand}</b><br/>{city}<br/>Lat: {lat} Lon: {lon}", "style":{"color":"white"}})
 
     st.pydeck_chart(deck, use_container_width=True)
 

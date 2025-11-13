@@ -54,7 +54,7 @@ st.markdown(
         <div style="color:#9de8b8">AI Demand Forecasting & Order Optimization — German Retail</div>
       </div>
       <div style="text-align:right;">
-        <div style="font-size:12px;color:#9de8b8">M516 • Student Project</div>
+        <div style="font-size:12px;color:#9de8b8"></div>
       </div>
     </div>
     <hr style="border:1px solid rgba(255,255,255,0.06)"/>
@@ -93,7 +93,7 @@ with st.sidebar:
     st.write("Quick actions")
     if st.button("Reset filters"):
         city = "All"; supermarket = "All"; product = "All"
-    st.markdown("<div style='font-size:12px;color:#cfeedd'>Note: model loads from models/xgb_model.joblib</div>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size:12px;color:#cfeedd'></div>", unsafe_allow_html=True)
 
 # Apply filters for use across pages
 filtered = df.copy()
@@ -220,8 +220,8 @@ with tabs[2]:
     st.markdown("Model explainability and quick analytics")
     col1, col2 = st.columns([2,1])
     with col1:
-        st.markdown("### Feature impact (SHAP)")
-        if st.button("Show SHAP image (if available)"):
+        st.markdown("### Feature impact ")
+     
             try:
                 st.image(SHAP_PATH, caption="SHAP summary (feature impact)", use_column_width=True)
             except Exception:

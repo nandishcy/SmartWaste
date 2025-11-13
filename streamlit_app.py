@@ -303,6 +303,8 @@ with tabs[4]:
 
   deck = pdk.Deck(layers=[layer], initial_view_state=view, map_style="light",  # or "road"
                 tooltip={"html": "<b>{brand}</b><br/>{city}<br/>Lat: {lat} Lon: {lon}", "style":{"color":"black"}})
+st.map(map_df[['lat', 'lon']])
+
 
     st.pydeck_chart(deck, use_container_width=True)
 

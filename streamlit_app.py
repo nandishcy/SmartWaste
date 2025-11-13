@@ -301,8 +301,8 @@ with tabs[4]:
     # initial view set to Germany center
     view = pdk.ViewState(latitude=51.1657, longitude=10.4515, zoom=5, pitch=0)
 
-    deck = pdk.Deck(layers=[layer], initial_view_state=view, map_style="mapbox://styles/mapbox/dark-v10",
-                    tooltip={"html": "<b>{brand}</b><br/>{city}<br/>Lat: {lat} Lon: {lon}", "style":{"color":"white"}})
+  deck = pdk.Deck(layers=[layer], initial_view_state=view, map_style="light",  # or "road"
+                tooltip={"html": "<b>{brand}</b><br/>{city}<br/>Lat: {lat} Lon: {lon}", "style":{"color":"black"}})
 
     st.pydeck_chart(deck, use_container_width=True)
 

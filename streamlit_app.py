@@ -244,36 +244,68 @@ with tabs[3]:
     st.markdown("This is a simple heuristic suggestion. For production, integrate real inventory costs & constraints.")
 
 # -------------------- Page: Map --------------------
+# -------------------- Map (real supermarket locations) --------------------
 with tabs[4]:
-    st.subheader("Germany Map • Supermarket Pins")
-    st.markdown("Interactive: zoom and click pins. Pins show city + supermarket counts (from filtered data).")
+    st.subheader("Germany Map • Real Supermarket Locations")
+    st.markdown("Interactive map: select brand or show all. Pins show brand + city.")
 
-    # city coordinates for Berlin, Munich, Hamburg
-    city_coords = {
-        "Berlin": (52.5200, 13.4050),
-        "Munich": (48.1351, 11.5820),
-        "Hamburg": (53.5511, 9.9937)
+    try:
+        stores = pd.read_csv("supermarkets_real.csv")
+    except FileNotFoundError:
+        st.warning("data/supermarkets_real.csv not found. Upload the CSV to your repo under /data.")
+        st.stop()
+
+    # Normalize column names if necessary
+    stores.columns = [c.strip() for c in stores.columns]
+
+    # brand dropdown
+    brands = ["All"] + sorted(stores["brand"].dropna().unique().tolist())
+    sel_brand = st.selectbox("Select brand to show", brands, index=0)
+
+    map_df = stores.copy()
+    if sel_brand != "All":
+        map_df = map_df[map_df["brand"] == sel_brand]
+
+    # small jitter for visibility
+    map_df["lat"] = map_df["lat"].astype(float) + np.random.uniform(-0.001, 0.001, len(map_df))
+    map_df["lon"] = map_df["lon"].astype(float) + np.random.uniform(-0.001, 0.001, len(map_df))
+
+    # brand -> color mapping (RGB)
+    brand_colors = {
+        "Edeka": [5,150,255],
+        "Rewe": [255,80,80],
+        "Lidl": [255,210,0],
+        "Aldi": [0,200,120],
+        "Netto": [255,120,0],
+        "Kaufland": [180,60,200]
     }
+    # default color
+    default_color = [200,200,200]
 
-    # Aggregate counts per supermarket per city in filtered dataset (or global if All)
-    map_df = filtered.groupby(["city","supermarket"]).size().reset_index(name="count")
-    # if map_df empty fallback to showing cities with count 0
-    if map_df.empty:
-        fallback = pd.DataFrame([{"city":"Berlin","supermarket":"Edeka","count":0},
-                                 {"city":"Munich","supermarket":"Rewe","count":0},
-                                 {"city":"Hamburg","supermarket":"Lidl","count":0}])
-        map_df = fallback
+    # attach color column
+    def get_color(brand):
+        return brand_colors.get(brand, default_color)
+    map_df["color"] = map_df["brand"].apply(get_color)
 
-    # build pydeck data
-    rows = []
-    for _, r in map_df.iterrows():
-        cityn = r["city"]
-        if cityn in city_coords:
-            lat, lon = city_coords[cityn]
-        else:
-            lat, lon = 51.1657, 10.4515  # center of Germany fallback
-        rows.append({"lat": lat + np.random.uniform(-0.02,0.02), "lon": lon + np.random.uniform(-0.02,0.02),
-                     "label": f"{r['supermarket']} ({r['count']})", "count": int(r["count"])})
-    pins = pd.DataFrame(rows)
+    # prepare pydeck layer
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=map_df,
+        get_position=["lon", "lat"],
+        get_radius=500,
+        get_fill_color="color",
+        pickable=True,
+        auto_highlight=True
+    )
 
-    deck = pdk.Deck
+    # initial view set to Germany center
+    view = pdk.ViewState(latitude=51.1657, longitude=10.4515, zoom=5, pitch=0)
+
+    deck = pdk.Deck(layers=[layer], initial_view_state=view, map_style="mapbox://styles/mapbox/dark-v10",
+                    tooltip={"html": "<b>{brand}</b><br/>{city}<br/>Lat: {lat} Lon: {lon}", "style":{"color":"white"}})
+
+    st.pydeck_chart(deck, use_container_width=True)
+
+    # small table of visible stores
+    with st.expander("Show store list"):
+        st.dataframe(map_df[["brand","city","lat","lon"]].reset_index(drop=True))

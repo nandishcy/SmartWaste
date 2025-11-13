@@ -249,9 +249,9 @@ with tabs[4]:
     st.markdown("Interactive map: select brand or show all. Pins show brand + city.")
 
     try:
-        stores = pd.read_csv("data/supermarkets_real.csv")
+        stores = pd.read_csv("supermarkets_real.csv")
     except FileNotFoundError:
-        st.warning("data/supermarkets_real.csv not found. Upload the CSV to your repo under /data.")
+        st.warning("supermarkets_real.csv not found. Upload the CSV to your repo under")
         st.stop()
 
     # Normalize column names if necessary

@@ -225,7 +225,7 @@ with tabs[2]:
             try:
                 st.image(SHAP_PATH, caption="SHAP summary (feature impact)", use_column_width=True)
             except Exception:
-                st.warning("No SHAP image found. Run SHAP script offline and upload outputs/shap_summary.png")
+                st.warning("No SHAP image found. ")
     with col2:
         st.markdown("### Quick stats")
         top_products = filtered.groupby("product")["sales"].sum().reset_index().sort_values("sales", ascending=False).head(5)

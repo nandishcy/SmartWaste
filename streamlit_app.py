@@ -238,7 +238,7 @@ with tabs[3]:
     st.subheader("Order Optimization")
     st.markdown("Use the forecast to compute recommended order quantities.")
     pred_mean = st.number_input("Enter expected daily demand (or use predicted total)", min_value=0, value=100)
-    safety = st.slider("Safety factor (higher → less stockout risk)", 80, 99, 95)
+    safety = st.slider("Safety factor (higher → less stockout risk)", 5, 30, 10)
     rec_q = optimize_order(pred_mean, safety/100.0)
     st.metric("Recommended order quantity (units)", f"{rec_q:,}")
     st.markdown("This is a simple heuristic suggestion. For production, integrate real inventory costs & constraints.")
